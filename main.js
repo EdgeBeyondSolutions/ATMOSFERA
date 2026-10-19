@@ -70,21 +70,42 @@
     var root = $("[data-cursor-root]");
     if (!root || !fineHover) return;
     document.documentElement.classList.add("has-cursor");
-    var ring = $(".cursor-ring", root);
     var dot = $(".cursor-dot", root);
-    var firstMove = false;
+    // Inner <i> carries the scale so it doesn't fight with positioning
+    if (dot && !dot.firstElementChild) dot.appendChild(document.createElement("i"));
+
+    var mx = -100, my = -100;       // real pointer
+    var dx = mx, dy = my;           // dot (soft, silky follow)
+    var DOT_EASE = reduced ? 1 : 0.2;
+    var running = false, firstMove = false;
+
+    function frame() {
+      dx += (mx - dx) * DOT_EASE;
+      dy += (my - dy) * DOT_EASE;
+      if (dot) dot.style.transform = "translate3d(" + dx.toFixed(2) + "px," + dy.toFixed(2) + "px,0)";
+      var settled = Math.abs(mx - dx) < 0.05 && Math.abs(my - dy) < 0.05;
+      if (settled) { running = false; return; }
+      requestAnimationFrame(frame);
+    }
+    function kick() { if (!running) { running = true; requestAnimationFrame(frame); } }
 
     window.addEventListener("mousemove", function (e) {
-      var tx = e.clientX, ty = e.clientY;
-      if (dot) dot.style.transform = "translate3d(" + tx + "px," + ty + "px,0)";
-      if (ring) ring.style.transform = "translate3d(" + tx + "px," + ty + "px,0)";
+      mx = e.clientX; my = e.clientY;
       if (!firstMove) {
         firstMove = true;
+        dx = mx; dy = my;   // no fly-in from the corner on first move
         root.classList.add("is-ready");
       }
-    });
+      root.classList.remove("is-hidden");
+      kick();
+    }, { passive: true });
 
-    var hoverables = "a, button, .tilt, [data-cursor-interactive]";
+    document.documentElement.addEventListener("mouseleave", function () { root.classList.add("is-hidden"); });
+    document.documentElement.addEventListener("mouseenter", function () { root.classList.remove("is-hidden"); });
+    window.addEventListener("mousedown", function () { root.classList.add("is-down"); });
+    window.addEventListener("mouseup", function () { root.classList.remove("is-down"); });
+
+    var hoverables = "a, button, .tilt, label, [role='button'], [data-cursor-interactive]";
     document.addEventListener("mouseover", function (e) {
       var t = e.target.closest ? e.target.closest(hoverables) : null;
       if (t && !t.contains(e.relatedTarget)) root.classList.add("is-interactive");
